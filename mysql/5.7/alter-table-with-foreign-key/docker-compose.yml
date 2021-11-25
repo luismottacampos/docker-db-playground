@@ -1,0 +1,39 @@
+version: "3.9"
+services:
+  get-sakila:
+    image: ubuntu
+    container_name: get-sakila
+    volumes:
+      - ./:/mnt
+    command: bash -c "
+        apt-get update --assume-yes
+        && apt-get install --assume-yes curl
+        && curl -qso - https://downloads.mysql.com/docs/sakila-db.tar.gz | tar xzC /mnt
+      "
+
+  sakiladb:
+    image: mysql:5.7
+    container_name: sakiladb
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    expose:
+      - 3306
+
+  load-sakila:
+    image: mysql:5.7
+    container_name: load-sakila
+    depends_on:
+      - get-sakila
+      - sakiladb
+    volumes:
+      - ./sakila-db:/mnt/sakila-db
+    working_dir: /mnt/sakila-db
+    command: bash -c "
+        apt-get update --assume-yes
+        && apt-get install --assume-yes wait-for-it
+        && wait-for-it sakiladb:3306
+        && mysql -vvwh sakiladb -e 'source /mnt/sakila-db/sakila-schema.sql'
+        && mysql -vvwh sakiladb -e 'source /mnt/sakila-db/sakila-data.sql'
+        && mysql -vvwh sakiladb -e 'ALTER TABLE sakila.film MODIFY COLUMN description VARCHAR(140), ALGORITHM=COPY, LOCK=SHARED;'
+      "
+
